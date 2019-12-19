@@ -716,7 +716,7 @@ https://www.cnblogs.com/toby-ruan/p/8510408.html
 <property name="current_session_context_class">thread</property>
 ```
 
-获取session
+获取threadlocal的session
 
 ```java
 public void test(){
