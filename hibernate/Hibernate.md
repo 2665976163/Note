@@ -1,8 +1,12 @@
 # Hibernate
 
-在三层架构中对应Dao层，一款轻量级的框架.
+ Hibernate是一个开放源代码的对象关系映射框架，它对JDBC进行了非常轻量级的对象封装，它将POJO与数据库表建立映射关系，是一个全自动的ORM框架.
 
 hibernate 框架就是对jdbc的封装，使用hibernate的好处就是不需要写复杂的jdbc代码，也不需要写sql实现了.
+
+**什么是ORM？**
+
+​	对象关系映射，将Java中的对象与关系型数据库的表建立映射关系，从而操作对象就可以操作表.
 
 
 
@@ -460,7 +464,7 @@ hibernate.connection.driver_clas=com.mysql.jdbc.Driver
 
 ```java
 public void main(String [] s){
-    //该方式默认读 hibernate.cfg.xml
+    //该方式默认读 hibernate.cfg.xml 
     Configuration config = new Configuration().configure();
     //该方式默认读 hibernate.properties
     Configuration config = new Configuration();
@@ -471,4 +475,255 @@ public void main(String [] s){
 ```
 
 
+
+
+
+
+
+### 创建sessionFactory的方式
+
+不同版本的hibernate创建的方式都不太相同，虽然有些可以兼容，但也会有一些缺陷.
+
+hibernate 3.x
+
+```java
+public void test(){
+    Configuration config = new Configuration().configure();
+	SessionFactory sessionFactory = config.buildSessionFactory();
+}
+```
+
+hibernate 4.x
+
+```java
+SessionFactory sessionFactory = null;
+Configuration configuration =  new Configuration().configure();
+ServiceRegistry serviceRegistry = new ServiceRegistryBuilder().
+    applySettings(configuration.getProperties()).buildServiceRegistry();
+sessionFactory = configuration.buildSessionFactory(serviceRegistry);
+```
+
+hibernate 5.x
+
+```java
+final StandardServiceRegistry registry = new StandardServiceRegistryBuilder().configure().build();
+	sessionFactory = new MetadataSources( registry ).buildMetadata().buildSessionFactory();
+```
+
+**详情链接**
+
+```cmd
+https://blog.csdn.net/river6666/article/details/83445154
+```
+
+
+
+
+
+
+
+
+
+
+
+### CRUD操作
+
+> 增加
+
+```java
+public Serializable save(Object obj);	//传入对象:返回生成自增长的id 强转int
+```
+
+> 查询
+
+```java
+>>> 根据id查询
+public Object get(Class clazz,Serializable id); //传入Class,id:返回Object类型的Class对象
+public Object load(Class clazz, Serializable id); //传入Class,id:返回Object类型的Class对象
+>>> 查询全部
+public Query createQuery(String sql); //传入sql语句:返回查询结果
+public SQLQuery createSQLQuery(String sql); //传入sql
+```
+
+**案例演示**
+
+```java
+public void test(){
+    Configuration cfg = new Configuration().configure();
+    SessionFactory factory = cfg.buildSessionFactory();
+    Session session = factory.openSession();
+    >>> 核心代码 from后必须是实体类的名称，并非数据表
+    Query query = session.createQuery("from User");
+    List<User> list = query.list();
+}
+```
+
+**get 与 load 的区别参考【很重要】**
+
+```txt
+https://www.cnblogs.com/yichenscc/p/11244227.html
+#映射类被final修饰后get与load将没有区别，因为final不能被继承，那么将不存在有代理类.
+```
+
+> 修改
+
+```java
+public void update(Object obj); //传入JavaBean:修改成功! 
+//bean中必须包含id,老值,新值,否则bean中属性为null也会导致修改时数据库的老值消失
+//推荐先查询，set新值后再将bean传入update方法内.
+```
+
+> 删除
+
+```java
+public void delete(Object obj); //传入JavaBean:删除成功! 必须包含id
+//推荐先查询,再删除.
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+### 主键生成策略
+
+
+
+##### 主键的分类
+
+> 自然主键
+
+```txt
+将表中某一个唯一的字段设为主键. 比如：用户的身份证号.
+```
+
+> 代理主键
+
+```txt
+新建一个与表毫无关系的字段作为id. 比如：通常用的id字段.
+```
+
+
+
+##### Hibernate的主键生成策略
+
+解开映射类id中native的疑惑.
+
+```xml
+<id name="uId" column="uId">
+    <generator class="native" />
+</id>
+```
+
+> increment
+
+```tex
+hibernate提供的自动增长,底层首先会通过sql语句获取主键的最大值在最大值的基础上加1,在单个项目中可以正常使用，因为底层使用了synchronized,不建议在集群环境使用,因为此时会产生线程安全问题.
+```
+
+> identity
+
+```tex
+使用的是数据库自带的自增长,使用时对应表中的该字段必须为主键且自动增长. 
+--Oracle这类没有自增字段的则不支持.
+```
+
+> sequence
+
+```tex
+使用的是数据库自带的序列[类似于自增长].
+不支持sequence的数据库则不行,比如MySQL没有序列.
+```
+
+> native
+
+```java
+由hibernate根据使用的数据库自行判断采用identity、hilo、sequence其中一种作为主键生成方式.
+```
+
+> assigned
+
+```java
+表示不需要hibernate帮助生成id,当映射对象中属性id是什么存入数据库就是什么.
+```
+
+> uuid
+
+```java
+字符串字段生成主键可以通过该方式生成.
+```
+
+
+
+
+
+
+
+
+
+
+
+### 三种状态
+
+hibernate为了更好管理对象，将对象划分了三种状态：瞬时态、持久态、脱管态.
+
+![](images/hibernate 三种状态.png)
+
+**瞬时(临时)态：**数据库中不存在该对象，不被session管理 直接通过new创建的.
+
+**持久态：**被session管理，数据库中存在.
+
+**脱管(游离)态：**对象的主键在缓存中不存在，且数据库中存在.
+
+
+
+
+
+
+
+
+
+### 一级缓存
+
+​			hibernate优化反复查询数据库消耗问题，数据库数据存储在磁盘中，当读取数据库数据时需要到磁盘中查找，但磁盘读取速度比较慢，此时hibernate就会将磁盘中的数据读取到内存中，然后当读取数据时在内存中读取即可，若内存中没有该数据时才会到数据库中读取该数据并存储在hibernate缓存中，这样提高了再次读取数据的速度。
+
+**详细参考**
+
+```tex
+https://www.cnblogs.com/toby-ruan/p/8510408.html
+```
+
+
+
+
+
+
+
+### Threadlocal
+
+共享session对象，保证多个类执行的是同一个session对象
+
+需要在核心配置文件中配置以下标签
+
+```xml
+<property name="current_session_context_class">thread</property>
+```
+
+获取session
+
+```java
+public void test(){
+	Configuration configuration = new Configuration().configure();
+	SessionFactory sessionFactury = configuration.buildSessionFactory();
+    Session currentSession = sessionFactury.getCurrentSession();
+    //该session不需要close 只需要commit 就行，底层会close.
+}
+```
 
