@@ -1156,6 +1156,57 @@ public class SpringMVC {
 
 
 
+## 文件下载
+
+**核心代码Controller**
+
+```java
+@RequestMapping("/download")
+	public ResponseEntity<byte[]> export(HttpServletRequest request,String fileName) throws IOException {
+		//获取文件所在目录
+		String realPath2 = request.getServletContext().getRealPath("file");
+		//将文件路径与文件名称相加获取绝对路径
+		File file = new File(realPath2+"/"+fileName);
+
+		//设置头信息
+		HttpHeaders headers = new HttpHeaders();
+		headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+		headers.setContentDispositionFormData("attachment", fileName);
+
+		//返回文件到前台
+		return new ResponseEntity<byte[]>(FileUtils.readFileToByteArray(file), headers, HttpStatus.CREATED);
+	}
+```
+
+**前台内容**
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Insert title here</title>
+</head>
+<body>
+	<a href="download?fileName=a.png">下载</a>
+</body>
+</html>
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## 拦截器
 
 **实现步骤**
@@ -1183,6 +1234,86 @@ public class SpringMVC {
 ​	配置异常处理类
 
 ​	捕获并抛出异常
+
+### 实现方式有三种
+
+SimpleMappingExceptionResolver、HandlerExceptionResolver 、@ControllerAdvice + @ExceptionHandler
+
+- **使用SimpleMappingExceptionResolver实现异常处理：** 仅能获取到异常信息，若在出现异常时，对需要获取除异常以外的数据的情况不适用 
+- **实现HandlerExceptionResolver 接口自定义异常处理器：** 能获取导致出现异常的对象，有利于提供更详细的异常处理信息 
+- **使用@ExceptionHandler注解实现异常处理：** 无需配置，不能获取除异常以外的数据 
+
+**第一种不演示，可以使用注解代替**
+
+**第二种HandlerExceptionResolver 异常处理**
+
+**步骤描述：**创建异常类实现该接口重写该接口方法，将异常类加入spring容器即可.
+
+**异常类**
+
+```java
+@Component
+public class MyHandleException implements HandlerExceptionResolver {
+
+	@Override
+	public ModelAndView resolveException(HttpServletRequest request, 
+                                         HttpServletResponse response, 
+                                         Object bean,
+                                         Exception ex) {
+		System.out.println(bean+" -- "+ex.getMessage());
+		ModelAndView modelAndView = new ModelAndView("error");
+		modelAndView.addObject("ex", ex);
+		return modelAndView;
+	}
+
+}
+```
+
+**bean:**发生异常的准确对象
+
+**ex:**异常对象
+
+
+
+**第三种@ControllerAdvice + @ExceptionHandler**
+
+@ControllerAdvice定义全局异常类，@ExceptionHandler定义异常接收类型
+
+```java
+import org.springframework.web.servlet.ModelAndView;
+@ControllerAdvice
+public class MyException{
+	@ExceptionHandler(value = { NullPointerException.class})
+	public ModelAndView test( Object handler,Exception ex) {
+		// 如果要将异常传递到视图中（jsp页面），必须使用ModelAndView来进行数据传递
+		// 不能使用Map形参的方式，否则会报错
+		Map<String, Object> map = new HashMap<String, Object>();
+		map.put("ex", ex);
+		ModelAndView mv = new ModelAndView("error", map);
+		return mv;
+	}
+}
+```
+
+将该类加入spring容器即可.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
