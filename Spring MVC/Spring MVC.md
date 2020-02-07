@@ -101,7 +101,7 @@
   </servlet>
   
   <servlet-mapping>
-  	<servlet-name>springmvc</servlet-name>
+  	<servlet-name>dispatcherServlet</servlet-name>
   	<url-pattern>/</url-pattern>
   </servlet-mapping>
     <filter>
