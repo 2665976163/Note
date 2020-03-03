@@ -220,21 +220,289 @@ EnableAutoConfiguration内部有俩个注解分别为
 
 
 
-### 配置文件
+## 配置文件
 
-​		SpringBoot使用的全局配置文件，主要就是原本springboot为用户做了许多自动配置，若某些配置用户不满意可以通过全局配置文件修改，比如访问项目的端口号.
+spring boot的全局配置文件名称固定
 
-<u>**位置                                              **</u>
+- application.properties
+- application.yml
 
-​	src/main/sources下 或 类路径/config 下
+配置文件作用：修改Spring Boot在底层封装好的默认值；
 
-<u>**文件固定名称及类型          **</u>
+YAML（YAML AaIN'T Markup Language）
 
-​	application.properties || application.yml 
+是一个标记语言
 
-<u>**YML                            **</u>
+又不是一个标记语言
 
-YAML (YAML Aint Markup Language)是一种标记语言，通常以.yml为后缀的文件，是一种直观的能够被电脑识别的数据序列化格式，并且容易被人类阅读，容易和脚本语言交互的，可以被支持YAML库的不同的编程语言程序导入，一种专门用来写配置文件的语言。可用于如： Java，C/C++, Ruby, Python, Perl, C#, PHP等。
+**标记语言：**
 
-<u>**YML语法                         **</u>
+以前的配置文件；大多数使用的是 xxx.xml文件；
+
+以数据为中心，比json、xml等更适合做配置文件
+
+YAML：配置例子
+
+```yml
+server:
+	port: 9000 
+```
+
+XML:
+
+```xml
+<server>
+	<port>9000</port>
+</server> 
+```
+
+## 2、YAML语法
+
+### 1、基本语法
+
+k:(空格)v:表示一堆键值对（空格必须有）；
+
+以空格的缩进来控制层级关系；只要是左对齐的一列数据，都是同一层级的
+
+```yml
+server:
+	port: 9000
+	path: /hello 
+```
+
+属性和值也是大小写敏感
+
+### 2、值的写法
+
+**字面量：普通的值（数字，字符串，布尔）**
+
+k: v:字面直接来写；
+
+字符串默认不用加上单引号或者双引号
+
+"":**双引号** 不会转义字符串里的特殊字符；特殊字符会作为本身想要表示的意思
+
+```tex
+name:"zhangsan\n lisi"` 输出：`zhangsan换行 lisi
+```
+
+'':**单引号** 会转义特殊字符，特殊字符最终只是一个普通的字符串数据
+
+```tex
+name:'zhangsan\n lisi'` 输出：`zhangsan\n lisi
+```
+
+**对象、Map（属性和值）键值对**
+
+k :v ：在下一行来写对象的属性和值的关系；注意空格控制缩进
+
+对象还是k:v的方式
+
+```yml
+frends:
+	lastName: zhangsan
+	age: 20 
+```
+
+行内写法
+
+```yml
+friends: {lastName: zhangsan,age: 18} 
+```
+
+**数组（List、Set）:** 用-表示数组中的一个元素
+
+```yml
+pets:
+ ‐ cat
+ ‐ dog
+ ‐ pig 
+```
+
+行内写法
+
+```yml
+pets: [cat,dog,pig] 
+```
+
+**组合变量**
+
+多个组合到一起
+
+## 3、配置文件值注入
+
+### 1、@ConfigurationProperties
+
+1、application.yml 配置文件
+
+```yml
+person:
+  age: 18
+  boss: false
+  birth: 2017/12/12
+  maps: {k1: v1,k2: 12}
+  lists:
+   - lisi
+   - zhaoliu
+  dog:
+    name: wangwang
+    age: 2
+  last-name: wanghuahua
+```
+
+`application.properties` 配置文件（二选一）
+
+```properties
+idea配置文件utf-8
+properties 默认GBK
+person.age=12
+person.boss=false
+person.last-name=张三
+person.maps.k1=v1
+person.maps.k2=v2
+person.lists=a,b,c
+person.dog.name=wanghuahu
+person.dog.age=15
+```
+
+所以中文输出乱码，改进settings-->file encoding -->[property-->utf-8 ,勾选转成ascii]
+
+javaBean
+
+```java
+/**
+* 将配置文件的配置每个属性的值，映射到组件中
+* @ConfigurationProperties:告诉SpringBoot将文本的所有属性和配置文件中的相关配置进行绑定；
+* prefix = "person" 配置文件按你的那个属性进行一一映射
+* *
+只有这个组件是容器中的组件，才能提供到容器中
+*/
+@Component
+@ConfigurationProperties(prefix = "person")
+public class Person {
+    private String lastName;
+    private Integer age;
+    private Boolean boss;
+    private Map<String,Object> maps;
+    private List<Object> lists;
+    private Dog dog;
+```
+
+导入配置文件处理器，以后编写配置就有提示了
+
+```maven
+<dependency>
+	<groupId>org.springframework.boot</groupId>
+	<artifactId>spring‐boot‐configuration‐processor</artifactId>
+	<optional>true</optional>
+</dependency> 
+```
+
+### 2、@Value注解
+
+更改javaBean中的注解
+
+```java
+@Component
+public class Person {
+    /**
+     * <bean class="Person">
+     *     <property name="lastName" value="字面量/${key}从环境变量/#{spEL}"></property>
+     * </bean>
+     */
+    @Value("${person.last-name}")
+    private String lastName;
+    @Value("#{11*2}")
+    private Integer age;
+    @Value("true")
+    private Boolean boss;
+```
+
+|                | @ConfigurationProperties | @Value   |
+| -------------- | ------------------------ | -------- |
+| 功能           | 批量注入配置文件属性     | 单个指定 |
+| 松散绑定(语法) | 支持                     | 不支持   |
+| spEL           | 不支持                   | 支持     |
+| JSR303校验     | 支持                     | 不支持   |
+| 复杂类型       | 支持                     | 不支持   |
+
+> 松散语法：javaBean中last-name(或者lastName) -->application.properties中的last-name;
+>
+> spEL语法：#{11*2}
+>
+> JSR303：@Value会直接忽略，校验规则
+
+JSR303校验：
+
+```java
+@Component
+@ConfigurationProperties(prefix = "person")
+@Validated
+public class Person {
+    @Email
+    private String lastName;
+```
+
+复杂类型栗子：
+
+```java
+@Component
+public class Person {
+    /**
+     * <bean class="Person">
+     *     <property name="lastName" value="字面量/${key}从环境变量/#{spEL}"></property>
+     * </bean>
+     */
+    private String lastName;
+    private Integer age;
+    private Boolean boss;
+   // @Value("${person.maps}")
+    private Map<String,Object> maps;
+```
+
+以上会报错，不支持复杂类型
+
+**使用场景分析**
+
+```
+如果说，我们只是在某个业务逻辑中获取一下配置文件的某一项值，使用@Value；
+```
+
+如果专门编写了一个javaBean和配置文件进行映射，我们直接使用@ConfigurationProperties
+
+举栗子：
+
+1、编写新的Controller文件
+
+```java
+@RestController
+public class HelloController {
+
+    @Value("${person.last-name}")
+    private String name;
+    @RequestMapping("/hello")
+    public  String sayHello(){
+        return "Hello"+ name;
+    }
+}
+```
+
+2、配置文件
+
+```properties
+person.age=12
+person.boss=false
+person.last-name=李四
+person.maps.k1=v1
+person.maps.k2=v2
+person.lists=a,b,c
+person.dog.name=wanghuahu
+person.dog.age=15
+```
+
+3、测试运行
+
+访问 localhost:9000/hello
+
+结果为`Hello 李四`
 
