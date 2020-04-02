@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znsd.dao.AccountMapper">
+	<resultMap type="com.znsd.bean.Account" id="aAll">
+		<id property="aId" column="aId"/>
+		<result property="aName" column="aName"/>
+		<association property="user" column="uId" javaType="com.znsd.bean.User" select="com.znsd.dao.UserMapper.findById"/>
+	</resultMap>
+	<select id="findAll" resultMap="aAll">
+		select * from Account
+	</select>
+	<select id="findById" resultType="com.znsd.bean.Account" parameterType="java.lang.Integer">
+		select * from Account where aId = #{aId}
+	</select>
+</mapper>

@@ -14,3 +14,13 @@
 
 
 
+Redis 官网：https://redis.io/
+
+Redis中文网站：http://www.redis.cn
+
+Redis 在线测试工具：http://try.redis.io/
+
+
+
+## Redis安装
+

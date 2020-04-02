@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znsd.dao.ClassMapper">
+	<resultMap type="com.znsd.bean.MyClass" id="mCls">
+		<id property="cId" column="cId" />
+		<result property="cName" column="cName" />
+		<collection property="stuList" ofType="com.znsd.bean.MyStudent" column="sId" select="com.znsd.dao.StudentMapper.findById" />
+	</resultMap>
+	<select id="findAll" resultMap="mCls">
+		SELECT c.*,z.sId FROM myClass c LEFT JOIN stu_cls z ON c.`cId` = z.`cId` 
+	</select>
+	
+	<select id="findById" resultType="com.znsd.bean.MyClass" parameterType="java.lang.Integer">
+		select * from MyClass where cId = #{cId}
+	</select>
+</mapper>
