@@ -754,3 +754,1023 @@ public String getPort(){
 ```
 
 接着由RestTemplate直接请求某个准确的微服务地址。
+
+
+
+
+
+
+
+
+
+
+
+## OpenFeign
+
+ 	**Feign**是声明性Web服务客户端。它使编写Web服务客户端更加容易。要使用Feign，请创建一个接口并对其进
+
+行注释。它具有可插入注释支持，包括Feign注释和JAX-RS注释。Feign还支持可插拔编码器和解码器。Spring 
+
+Cloud添加了对Spring MVC注释的支持，并支持使用`HttpMessageConverters`Spring Web中默认使用的注释。
+
+Spring Cloud集成了Eureka和Spring Cloud LoadBalancer，以在使用Feign时提供负载平衡的http客户端。 
+
+------
+
+​	简单点说就是开发微服务，免不了需要服务间调用。Spring Cloud框架提供了RestTemplate和FeignClient两个方式完成服务间调，而我们开始用的RestTemplate会产生很多重复的代码，即使特意整理但还是看上去不是很规范，而使用OpenFeign进行微服务之间调用整体看起来就比较规范了。
+
+RestTemplate调用：
+
+- 创建RestTemplate对象
+- 对象与微服务的请求方式一致，如：get、post请求
+- 提供对应服务的服务地址、参数、返回类型
+
+OpenFeign调用：
+
+- 主启动类带上`@EnableFeignClients`
+- 要想调用某个服务就先为某个服务创建一个接口，且加上注解`@FeignClient("服务名称")`并指定服务名称
+- 在此接口中定义方法与对应服务做好映射，需要服务调用时直接注入即可。
+
+所需依赖
+
+```xml
+<!-- OpenFeign -->
+<dependency>
+  <groupId>org.springframework.cloud</groupId>
+  <artifactId>spring-cloud-starter-openfeign</artifactId>
+</dependency>
+```
+
+application.yml
+
+```yml
+server:
+  port: 80
+
+eureka:
+  client:
+    # true表示将自己注册进Eureka Server，默认为true
+    register-with-eureka: false
+    # 是否从Eureka Server抓取以有的注册信息，默认为true 集群必须设置为true才能配合Ribbon使用负载均衡
+    fetch-registry: true
+    service-url:
+      defaultZone: http://www.eureka7001.com:7001/eureka,http://www.eureka7002.com:7002/eureka
+```
+
+主程序入口 加上注解 `@EnableFeignClients`
+
+```java
+@SpringBootApplication
+@EnableFeignClients
+public class OpenFeignMain80 {
+    public static void main(String[] args) {
+        SpringApplication.run(OpenFeignMain80.class,args);
+    }
+}
+```
+
+接口定义 `@FeignClient("服务名称")`
+
+```java
+@Component
+@FeignClient("CLOUD-PAYMENT-SERVICE")
+public interface PaymentService {
+    @GetMapping("/payment/get/{id}")
+    public CommonResult getPaymentById(@PathVariable("id")Long id);
+}
+```
+
+服务调用
+
+```java
+@RestController
+public class OpenFeignController {
+    @Resource
+    private PaymentService paymentService;
+
+    @GetMapping("/payment/get/{id}")
+    public CommonResult getPaymentById(@PathVariable("id")Long id){
+        return paymentService.getPaymentById(id);
+    }
+}
+```
+
+------
+
+**OpenFeign的超时控制**
+
+​		OpenFeign进行服务调用时若1秒[默认]之内服务没有执行完毕，那么OpenFeign则认为这个服务有问题，立即抛出异常，那么在实际中某些服务正常执行时间确实超过1秒，所以我们需要设置OpenFeign的超时时间，从而保证服务调用成功
+
+```yml
+# 设置feign客户端超时时间（OpenFeign默认支持Ribbon）
+ribbon:
+  # 指的是建立连接后从服务器读取到可用资源所用时间 默认为1秒
+  ReadTimeout: 5000
+  # 指的是建立连接所用的时间，适用于网络状况正常的情况下，两端连接所用的时间
+  ConnectTimeout: 5000
+```
+
+
+
+------
+
+**OpenFeign的日志监控**
+
+OpenFeign级别
+
+```tex
+NONE: 默认的，不显示任何日志
+BASIC：仅记录请求方法、URL、响应状态码以及执行时间
+HEADERS：除了BASIC中定义的信息以外，还有请求和响应的头信息
+FULL： 除了HEADERS中定义的信息之外，还有请求和响应的正文及元数据
+```
+
+定义配置类
+
+```java
+import feign.Logger;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class FeignConfig {
+    @Bean
+    public Logger.Level feignLoggerLevel(){
+        // 除了HEADERS中定义的信息之外，还有请求和响应的正文及元数据
+        return Logger.Level.FULL;
+    }
+}
+```
+
+添加yml
+
+```yml
+logging:
+  level:
+    # feign日志以什么级别监控哪个接口
+    com.znsd.springcloud.service.PaymentFeignService: debug
+```
+
+
+
+
+
+## Hystrix
+
+**前言**
+
+​		在正常情况下某个微服务下的某个接口执行耗时为3秒，但该微服务其他接口都耗时为1秒，但该微服务3秒的接口被大量用户进行访问，tomcat本来底层就对线程资源有限制，此时tomcat的资源就可能全去处理3秒的接口，而导致原本执行只需要1秒的接口根本访问不了，可能后面服务器还会挂掉，但这些用户就只能干等或者说等待蛮久后系统抛出个异常给用户，这样用户简直想***什么垃圾网站，这种情况就可以使用Hystrix解决这些问题，可以解决一个接口被高并发导致其他接口无法访问的问题，还能解决用户等待某一时间正常耗时接口没有响应而做出的反馈而不是抛出异常或继续等待，并且还能解决更多问题。
+
+一篇不错Hystrix介绍文章
+
+```tex
+https://www.cnblogs.com/huangjuncong/p/9026949.html
+```
+
+Hystrix**所需依赖**
+
+```xml
+<!-- hystrix -->
+<dependency>
+	<groupId>org.springframework.cloud</groupId>
+	<artifactId>spring-cloud-starter-netflix-hystrix</artifactId>
+</dependency>
+```
+
+主启动类加上注解`@EnableCircuitBreaker`开启对Hystrix的支持
+
+```java
+@SpringBootApplication
+@EnableEurekaClient
+@EnableCircuitBreaker
+public class HystrixMain8001 {
+    public static void main(String[] args) {
+        SpringApplication.run(HystrixMain8001.class,args);
+    }
+}
+```
+
+### 服务降级
+
+------
+
+以下提供了三种服务降级方式：类中方法详细配置降级、默认降级、实现类降级
+
+**服务降级案例演示**
+
+@HystrixCommand： 能对某个一个接口定制 Hystrix的超时时间
+
+```java
+public @interface HystrixCommand {
+    // 若指定时间内被注解的方法没有响应则调用该指定的方法进行反馈给调用者
+    String fallbackMethod() default "";
+	// 设置指定时间
+    HystrixProperty[] commandProperties() default {};
+}
+```
+
+​	当下这个接口用户请求若在3秒之内没有响应给用户则会进行服务降级操作调用fallback方法进行响应给用户，当然不一定要叫做fallback，名称任意定义的，以下这种场景意思就是当用户调用某个接口正常耗时没有响应就给用户另外一种措施，而不是长时间的等待。
+
+步骤：
+
+​	\> 在方法上标明该注解`@HystrixCommand`，并配置降级方法，指定超时时间（默认1秒）
+
+```java
+@GetMapping("/payment/error")
+@HystrixCommand(fallbackMethod = "fallback", 
+				commandProperties = {
+					@HystrixProperty(
+                        name ="execution.isolation.thread.timeoutInMilliseconds", 
+                        value = "3000")
+				}
+)
+public String error(){
+	try {
+        //模拟正常耗时3秒因为网络波动该请求耗时5秒
+		Thread.sleep(5000);
+	} catch (InterruptedException e) {
+		e.printStackTrace();
+	}
+	System.out.println("执行完了哦");
+	return Thread.currentThread().getName()+",status: error";
+}
+//服务降级后的紧急措施
+public String fallback(){
+	return "啊哦！服务器出小差了";
+}
+```
+
+以上我们仅给可能耗时长的接口进行了服务降级的配置，现在其他服务也需要服务降级的配置，难道我们在每个方法上面都加这么一段东西吗
+
+```java
+fallbackMethod = "fallback", 
+				commandProperties = {
+					@HystrixProperty(
+                        name ="execution.isolation.thread.timeoutInMilliseconds", 
+                        value = "3000")
+				}
+```
+
+这样耦合度又高了许多，一个类中逻辑本不多时，被这么一搞又产生很多一致的代码，那么有没有这样一种，就是当前有10个接口，但8个降级的措施一致，只有俩个不一致，能不能就是弄个默认的服务降级后的措施，就是只要标上`@HystrixCommand`但没有进行详细的配置就使用默认的降级措施，若进行了详细配置就使用指定的，当然是有的那么就是我们的`@DefualtProperties`
+
+**@DefualtProperties**
+
+步骤：
+
+​	\> 在类中编写默认的降级方法
+
+​	\> 将该注解标明在类上，指定默认降级方法
+
+​	\> 在被调用的接口上标明@HystrixCommand没有详细配置则使用默认，反之使用指定
+
+主要功能：提供一个默认的降级措施，若标明了`@HystrixCommand`且没有进行详细配置的接口若出了问题那么就使用DefualtProperties指定的默认降级措施，反之就使用详细配置的降级措施
+
+`@DefualtProperties`需要声明在进行接口调用的类上
+
+```java
+@RestController
+@DefaultProperties(defaultFallback = "defualtfallback")
+public class DefualtPropertiesController {
+    @Resource
+    private OpenFeignService openFeignService;
+
+    @GetMapping("/defualtTest/error")
+    @HystrixCommand //这里使用的为默认降级措施，因为没有详细配置
+    public String error(){
+        return openFeignService.error();
+    }
+
+
+    @GetMapping("/defualtTest/info")
+    @HystrixCommand(fallbackMethod = "fallback",
+                    commandProperties = {
+            			@HystrixProperty(
+                            name = "execution.isolation.thread.timeoutInMilliseconds",
+                            value = "2000")
+    }) //这里进行了详细配置
+    public String info(){
+        return openFeignService.info();
+    }
+
+    public String defualtfallback(){
+        return "这是默认的降级措施";
+    }
+    public String fallback(){
+        return "这是特定的降级措施";
+    }
+}
+```
+
+其次该注解还能提供一个默认的接口响应时间，若不配置则默认1秒，若@HystrixCommand指定了时间则使用指定的。
+
+以上的俩种降级方式适合在微服务提供者中使用，但若在微服务消费方使用就比较混乱了，例如：不管是提供服务的方法还是降级措施的方法都写在同一个类中，所以在微服务消费方通过搭配FeignClient注解实现另一种服务降级，但微服务消费者也可以使用以上这俩种降级方式，只是说第三种在某一方面比较全面。
+
+**搭配FeignClient实现微服务降级**
+
+要想在消费者中使用第三种降级方法，首先找到你要为某个微服务提供服务降级的OpenFeign实现的接口，因为消费者是通过该接口进行服务之间调用的
+
+第一步我们要实现该接口，当然不是实现该接口进行服务调用，而是实现该接口的目的是为该接口下的每一个方法提供一个降级措施，并且在FeignClient注解中标明实现类的class，作用是当FeignClient实现的接口调用出问题时，降级会找到标明的类使用出问题方法的对应降级方法。
+
+**案例演示**
+
+步骤：
+
+​	\> 编写实现类，编写降级措施
+
+​	\> FeignClient注解指定实现类
+
+​	\> yml中配置Feign对Hystrix的支持
+
+`OpenFeign`实现的`CLOUD-PROVIDER-HYSTRIX`微服务调用接口
+
+```java
+@Component
+@FeignClient("CLOUD-PROVIDER-HYSTRIX"，fallback = OpenFeignServiceFallback.class)
+public interface OpenFeignService {
+    @GetMapping("/payment/error")
+    String error();
+
+    @GetMapping("/payment/info")
+    String info();
+}
+```
+
+我们实现该接口
+
+```java
+@Component
+public class OpenFeignServiceFallback implements OpenFeignService{
+    @Override
+    public String error() {
+        return "这是error的降级措施";
+    }
+
+    @Override
+    public String info() {
+        return "这是info的降级措施";
+    }
+}
+```
+
+application.yml 开启feign对hystrix的支持
+
+```yml
+feign:
+  hystrix:
+    enabled: true
+```
+
+------
+
+以上说明了三种服务降级的案例，优先级为：实现类降级 > 类中方法详细配置降级 > 默认降级
+
+但实现类降级也有问题，就是说不能设置超时时间，默认一秒
+
+
+
+
+
+### 服务熔断
+
+**简介**
+
+​		在微服务架构中,存在着多个微服务,彼此之间可能存在依赖关系,当某个单元出现故障或者网络不通畅时,就会因为依赖关系形成故障蔓延,最终导致整个系统瘫痪,相对于传统架构更加不稳定.为了解决这样的问题,产生了熔断器模式.
+
+**熔断器的作用**
+
+当某个微服务发生故障时,通过熔断器的故障监控,向调用方返回一个错误响应,而不是长时间的等待,这样就不会使线程因调用故障服务被长时间占用不释放,避免了故障在分布式系统中蔓延,造成大面积雪崩效应.
+
+**Hystrix 熔断器工作原理**
+
+服务端的服务降级逻辑会因 Hystrix命令调用依赖服务超时而触发,也就是调用服务超时会进入断路回调逻辑处理.
+
+但熔断器发挥作用需要满足熔断器三个重要条件:
+
+**1.快照时间窗**
+
+熔断器确定是否打开需要统计一些请求和错误数据,统计的时间范围就是快照时间窗,默认10秒.
+
+**2.请求总数下限**
+
+在快照时间窗内,必须满足请求总数下限才有资格熔断.默认为20次,如果说5秒内调用次数不足20次,即是请求服务超时,断路也不会打开.
+
+**3.错误百分比下限**
+
+当请求总数满足要求,但是错误率没有超过下限也不会熔断.默认50%.
+
+因此,熔断器打开的条件是:在10秒快照时间窗期内,至少调用20次服务,并且服务调用错误率超过50%,才会打开熔断器.
+
+不满足以上条件熔断器不会打开,服务调用错误只会触发服务降级,也就是调用fallback函数.每个请求时间延迟就是近似hystrix的超时时间.如果请求时间超过设定超时时间后就会返回fallback.当满足上面条件断路器打开,之后再请求调用的时候将不再调用处理逻辑,而是直接调用降级逻辑,会直接返回fallback,不在等待是否超时.通过断路器实现自动发现错误并将降级逻辑切换为主逻辑,减少响应延迟的效果.
+
+在熔断器打开后,处理逻辑并没有结束.当熔断器打开,对处理逻辑进行熔断之后,hystrix会给处理逻辑设置一个休眠时间窗（默认5秒）,在这个时间窗内,降级逻辑为临时的主逻辑,当休眠时间窗结束,熔断器会释放一次请求到处理逻辑,如果此次请求正常返回,那么熔断器闭合,处理逻辑回复正常工作;如果此次请求依然有问题,熔断器重新设置一个休眠时间窗.
+
+通过以上机制,hystrix 熔断器实现了对依赖资源故障的处理,对降级策略的主动切换及对处理逻辑的主动恢复.这使得我们的微服务在依赖外部服务或资源的时候得到了非常好的保护，同时对于一些具备降级逻辑的业务需求可以实现自动化的切换和恢复，相比于设置开关由监控和运维来进行切换的传统实现方式显得更为智能和高效.
+
+**实现原理图**
+
+![熔断](images/Hystrix/熔断.webp)
+
+Hystrix的几个重要的默认配置，这几个配置在`HystrixCommandProperties` 中
+
+```java
+//是否开启熔断（默认为true）源码为static初始化
+private static final Boolean default_circuitBreakerEnabled = true;
+//1. 快照时间窗（ms）
+static final Integer default_metricsRollingStatisticalWindow = 10000;
+//2. 最少请求次数
+private static final Integer default_circuitBreakerRequestVolumeThreshold = 20;
+//3. Hystrix开启则进入休眠时间，期间有请求的话直接调用降级方法
+// 5秒后会再次尝试将部分请求发送到指定服务试探
+private static final Integer default_circuitBreakerSleepWindowInMilliseconds = 5000;
+//4. 错误比例
+private static final Integer default_circuitBreakerErrorThresholdPercentage = 50;
+```
+
+这几个属性共同组成了熔断器的核心逻辑，即：
+
+1. 每10秒的窗口期内，当请求次数超过20次，且出错比例超过50%，则触发熔断器打开
+2. 熔断器开启时这5秒任何请求来都直接调用服务降级的方法
+3. 当熔断器5秒后，会尝试放过去一部分流量进行试探
+
+若以上四个核心配置不满足要求时可以像服务降级那样重写超时时间
+
+**案例演示**
+
+```java
+// ================= 服务熔断 ==================
+@HystrixCommand(fallbackMethod = "paymentCircuitBreaker_fallback", 
+                commandProperties = {
+            		@HystrixProperty(name = "metrics.rollingStats.timeInMilliseconds",
+                                     value = "15") // 快照时间窗
+            		@HystrixProperty(name = "circuitBreaker.requestVolumeThreshold",
+                                     value = "10"), // 最少请求次数
+            		@HystrixProperty(name = "circuitBreaker.sleepWindowInMilliseconds",
+                                     value = "10000"), // 休眠时间
+            		@HystrixProperty(name = "circuitBreaker.errorThresholdPercentage",
+                                     value = "60") // 失败率达到多少后跳闸
+})
+```
+
+配置的属性名称与类中的属性名称不一致，若想清楚类中某个属性在配置属性中的名称是怎么样的请看`HystrixCommandProperties`这个类。
+
+
+
+### 服务限流
+
+------
+
+
+
+
+
+### Hystrix 图形化监控
+
+Hystrix图形化可以监控每个微服务的压力，也就是请求，包括： 成功、短路、错误的请求、超时、拒绝、故障、误差率。
+
+```tex
+成功：请求正常次数
+短路：熔断器开启时，所有请求都直接转给降级，这些被转给降级的请求会被暂时累计在短路中
+错误的请求：暂不清楚
+拒绝：暂不清楚
+故障：当请求抛出异常时，暂时累计在故障中
+误差率：指定时间访问成功与失败的概率
+```
+
+要想使用Hystrix图形化界面，需要在项目中配置几个东西【一般是创建一个新项目启动Hystrix图形化界面】
+
+**图形化依赖**
+
+```xml
+<!--  hystrix图形化依赖 依赖健康检查 -->
+<dependency>
+	<groupId>org.springframework.cloud</groupId>
+	<artifactId>spring-cloud-starter-netflix-hystrix-dashboard</artifactId>
+</dependency>
+<!-- 健康检查 -->
+<dependency>
+	<groupId>org.springframework.boot</groupId>
+	<artifactId>spring-boot-starter-actuator</artifactId>
+</dependency>
+```
+
+**主启动类加上注解**
+
+```java
+@SpringBootApplication
+@EnableHystrixDashboard //开启Hystrix的图形化
+public class HystrixMain6001 {
+    public static void main(String[] args) {
+        SpringApplication.run(HystrixMain6001.class,args);
+    }
+}
+```
+
+在需要被监控的项目中加上以下bean配置
+
+```java
+@SpringBootApplication
+@EnableFeignClients
+@EnableCircuitBreaker
+public class HystrixMain80 {
+    public static void main(String[] args) {
+        SpringApplication.run(HystrixMain80.class,args);
+    }
+
+    /**
+     * 此配置是为了服务监控而配置，与服务容错本身无关，spring cloud升级后的坑
+     * ServletRegistrationBean因为springboot的默认路径不是"/hystrix.stream"，
+     * 只要在自己的项目里配置上下面的servlet就可以了
+     */
+    @Bean
+    public ServletRegistrationBean getServlet(){
+        HystrixMetricsStreamServlet streamServlet 
+            = new HystrixMetricsStreamServlet();
+        ServletRegistrationBean registrationBean 
+            = new ServletRegistrationBean(streamServlet);
+        registrationBean.setLoadOnStartup(1);
+        registrationBean.addUrlMappings("/hystrix.stream");
+        registrationBean.setName("HystrixMetricsStreamServlet");
+        return registrationBean;
+    }
+}
+```
+
+不一定需要加在主程序启动类中，可以自己写个Java配置类，将该bean放入spring容器中即可。
+
+Hystrix图形化只能监控支持服务降级的请求接口，若不支持的则无法监控。
+
+当专门用于图形化监控的项目配置好以后可以通过地址访问hystrix图形化界面，我们创建的项目端口为`9001`
+
+```tex
+localhost:9001/hystrix
+```
+
+![hystrix 图形化](images/Hystrix/hystrix 图形化.png)
+
+此时需要开启被监控的项目，然后在图形化界面输入被监控的项目的ip信息等其他信息就在被监控的项目中制造请求，然后图形化界面就可以察觉到
+
+![hystrix 请求](images/Hystrix/hystrix 请求.png)
+
+
+
+
+
+
+
+## GateWay
+
+​	该项目提供了一个在Spring生态系统之上构建的API网关，Spring Cloud Gateway旨在提供一种简单而有效的方法来路由到API，并为它们提供跨领域的关注点，例如：安全性，监视/指标和弹性。
+
+简单点说就类似于保安，当有请求来时首先得经过它，它会进行一系列的校验处理，若满足条件后才会将请求转发给真正的微服务。
+
+主要功能：统一微服务的请求地址，不向外界暴露微服务真实地址。
+
+Gateway依赖
+
+```xml
+<!-- gateway -->
+<dependency>
+	<groupId>org.springframework.cloud</groupId>
+	<artifactId>spring-cloud-starter-gateway</artifactId>
+</dependency>
+```
+
+ \> **路由[Route]**：网关的基本构建块。它由**ID**，**目标URI**，**谓词集合**和**过滤器**集合定义。如果聚合谓词为true，则匹配路由。
+
+
+
+### 路由的俩种配置
+
+**applicaiton.yml**
+
+```yml
+spring:
+  cloud:
+    gateway:
+      routes:
+      # 路由器的id，没有固定规则，但要求唯一，建议配合服务名
+      - id: test_route1
+        # 匹配后提供服务的路由地址
+        uri: http://localhost:8001
+        # 断言[谓词]，路径相匹配的进行路由
+        predicates:
+        - Path=/test
+```
+
+​		以上就在Gateway中配置了一个路由，当用户请求Gateway时，会校验每个路由的断言，当前配置的断言校验规则为资源路径，若请求Gateway时资源路径为/test那么将满足条件，会将该请求转发给Uri中的路径+当前资源路径`http://localhost:8001/test`.
+
+**Java 配置**
+
+```java
+@Configuration
+public class GatewayConfig {
+    @Bean
+    public RouteLocator routes(RouteLocatorBuilder builder) {
+        RouteLocatorBuilder.Builder routes = builder.routes();
+        routes.route("path_route_atguitu", r ->
+                r.path("/test")
+                .uri("localhost:8001"));
+        return routes.build();
+    }
+}
+```
+
+注意：断言规则不止路径一种，还有很多
+
+![路径校验断言配置](images/GateWay/路径校验断言配置.png)
+
+这些是springcloud官网提供的，不同配置的断言规则案例。
+
+```tex
+https://cloud.spring.io/spring-cloud-static/spring-cloud-gateway/2.2.1.RELEASE/reference/html/#the-path-route-predicate-factory
+```
+
+### 负载均衡
+
+以前消费者80是通过微服务名称进行调用并且实现负载均衡，但现在80不能直接调用微服务，应该通过Gateway提供的接口进行调用，此时80无法通过ribbon实现负载均衡，因为GateWay只有一个，而GateWay包含了多个微服务，所以GateWay提供了负载均衡
+
+以下配置为Gateway的负载均衡
+
+```yml
+spring:
+  application:
+    name: cloud-getway
+  cloud:
+    gateway:
+      routes:
+        # payment_route2 # 路由器的id，没有固定规则，但要求唯一，建议配合服务名
+        - id: payment_routh2
+          # 匹配后提供服务的路由地址
+          uri: lb://CLOUD-PAYMENT-SERVICE
+          # 断言，路径相匹配的进行路由
+          predicates:
+            - Path=/payment/lb/**
+```
+
+lb://微服务名称，这样就实现了负载均衡，当80请求Gateway时由Gateway找到微服务名称下的全部微服务经过策略选出一个微服务，将80请求转发给该微服务。
+
+
+
+### 动态路由
+
+将路由信息存入redis，通过java的配置方式读取redis中的路由信息，然后存入spring容器中。
+
+### Filter过滤器
+
+全局过滤器，可用于token校验
+
+```java
+@Component
+public class GatewayFilter implements GlobalFilter, Ordered {
+
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        //判断请求参数的key是否包含一个为token的，若有则放行，否则拒绝访问
+        String name = exchange.getRequest().getQueryParams().getFirst("token");
+        if(name == null){
+            exchange.getResponse().setStatusCode(HttpStatus.NOT_ACCEPTABLE);
+            return exchange.getResponse().setComplete();
+        }
+        return chain.filter(exchange);
+    }
+
+    @Override
+    public int getOrder() {
+        // 过滤器的优先级
+        return 0;
+    }
+}
+```
+
+**全局过滤器配置案例**
+
+```tex
+https://www.pianshen.com/article/794881362/
+```
+
+
+
+
+
+
+
+
+
+## Config
+
+​		每个微服务都有自己的配置文件，如：application.yml但配置中像数据库配置等一些其他配置出现大量相同，一旦此时数据库信息更改了，那么需要更改大量微服务的配置，这显然是不合理的，所以Springcloud 提供了Config，可以将微服务中相同的配置整合成配置文件放置在远程仓库[git]中，Config可以读取远程仓库的配置文件信息，需要配置的微服务只需要去Config中读取即可，这样就能达到一处修改，处处使用的目的。
+
+![Config 执行流程](images/Config/Config 执行流程.png)
+
+**约定**
+
+ 当前项目ip：localhost:3344
+
+ git仓库文件：config-dev.yml、config-prod.yml、config-test.yml
+
+**服务端搭建**
+
+------
+
+所需依赖
+
+```xml
+<!-- spring cloud config -->
+<dependency>
+	<groupId>org.springframework.cloud</groupId>
+	<artifactId>spring-cloud-config-server</artifactId>
+</dependency>
+```
+
+yml 配置
+
+```yml
+server:
+  port: 3344
+spring:
+  cloud:
+    config:
+      server:
+        git:
+          # git仓库地址
+          uri: https://github.com/2665976163/springcloud-config.git
+          # 搜索目录
+          search-paths:
+            - springcloud-config
+      # 读取分支
+      label: master
+```
+
+主启动类加上注解 `@EnableConfigServer`
+
+```java
+@SpringBootApplication
+@EnableConfigServer
+public class ConfigMain3344 {
+    public static void main(String[] args) {
+        SpringApplication.run(ConfigMain3344.class,args);
+    }
+}
+```
+
+Config服务端只能按照固定格式获取git上的资源，若git上的资源不满足Config的固定格式那么无法获取
+
+![Config 文件](images/Config/Config 文件.png)
+
+Config只能获取按以下形式的固定格式资源.
+
+```path
+/{application}/{profile}[/ {label}]
+/{application}-{profile}.yml
+/{label}/{application}-{profile}.yml
+/{application}-{profile}.properties
+/{label}/{application}-{profile}.properties
+```
+
+**application:**  代表文件名称、**profile:**  代表环境、**label:**  代表分支.
+
+**案例演示**
+
+根据以上图已知git上有三个配置文件，我们Config服务端配置了该git仓库的地址，当有请求按照Config的固定格式请求某个资源时，Config会去git上拉取该资源，并进行返回资源内容，接下来我们只**演示前三种固定格式的写法**，因为都是大同小异。
+
+config-dev.yml
+
+```shell
+localhost:3344/config/dev/master #[]包裹的可加可不加，默认master分支
+```
+
+```shell
+localhost:3344/config-dev.yml #默认为master分支下的资源
+```
+
+```shell
+localhost:3344/master/config-dev.yml
+```
+
+以上者三种链接访问即可获取到指定文件的配置信息。
+
+`若突然有一天配置文件类型为txt该怎么获取？:只能通过第一种方式获取！因为第一种不区分文件类型`
+
+**客户端配置**
+
+------
+
+已知git上的配置是由Config服务端读取的，客户端只需要读取Config服务端的配置即可
+
+所需依赖
+
+```xml
+<!-- spring cloud config client -->
+<dependency>
+	<groupId>org.springframework.cloud</groupId>
+	<artifactId>spring-cloud-starter-config</artifactId>
+</dependency>
+```
+
+bootstrap.yml
+
+```yml
+spring:
+  cloud:
+    # config客户端配置
+    config:
+      # 分支名称
+      label: master
+      # 配置文件名称
+      name: config
+      # 读取后缀名称
+      profile: dev
+      # 配置中心地址
+      uri: http://localhost:3344
+```
+
+application.yml为用户级别，bootstrap.yml为系统级别，bootstrap级别更高。
+
+微服务需要Config服务端的某个配置文件信息，只需要在项目添加以上配置文件配置以上信息即可，以上配置可以读取到ip为`http://localhost:3344`的Config服务端中的master分支下的名称为config-dev的文件。
+
+```tex
+http://localhost:3344/config/dev/master
+```
+
+但这样会有一个问题，就是说git上的配置若被修改了，config服务端是可以立即获取到修改后的信息的，但读取config的微服务若在运行中则不能及时获取到最新配置的，因为微服务在启动时就会将所有配置读取完毕，当中途出现新配置这些微服务是不会立即读取的，只有通过重新启动才能获取到最新配置，但显然不合理。
+
+![Config 资源更新](images/Config/Config 资源更新.png)
+
+**动态刷新**
+
+------
+
+健康检查提供了一个不是很好的解决办法，但可以不重新启动微服务，使微服务读取到最新的配置信息
+
+微服务引入依赖
+
+```xml
+<!--健康检查依赖-->
+<dependency>
+	<groupId>org.springframework.boot</groupId>
+	<artifactId>spring-boot-starter-actuator</artifactId>
+</dependency>
+```
+
+需要刷新配置的类加上注解 
+
+```java
+@RefreshScope
+```
+
+yml配置
+
+```yml
+# 暴露监控端点
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+```
+
+post请求
+
+```tex
+微服务地址/actuator/refresh
+```
+
+当请求后，被标明`@RefreshScope`注解的类会重新加载最新配置，若没有加的类不会使用最新配置。
+
+
+
+
+
+## Bus
+
+ **Bus 消息总线**
+
+​	Spring Cloud Bus将轻量级消息代理程序链接到分布式系统的节点。然后可以使用此代理来广播状态更改（例如配置更改）或其他管理指令。一个关键思想是，总线就像是横向扩展的Spring Boot应用程序的分布式执行器。但是，它也可以用作应用之间的通信渠道。该项目为AMQP经纪人或Kafka提供了入门服务。 
+
+原本在微服务读取Config服务端配置只有在微服务启动时会读取最新的，当微服务在运行时git更改了配置信息，此时微服务是读取不到的，开始我们提供了一个健康检查来处理此问题，当git更新后只需要运维发送post请求给每一个微服务，这样每个微服务就能读取到最新的配置信息，问题是若微服务有上百个那么运维需要发送上百次post请求
+
+![post通知更新](images/Bus/post通知更新.png)
+
+微服务读取的都是Config服务端的配置，而且Config服务端可以感知最新的git配置，那么能不能让微服务去订阅Config服务端，然后当运维更改了配置信息，让运维发送一个请求给Config服务端，由Config服务端进行广播，订阅了Config服务端的微服务就可以更新配置。
+
+![post 一对多](images/Bus/post 一对多.png)
+
+那么听完这么多到底怎么订阅、广播？，这里就要引入消息中间件了RabbitMQ
+
+无论是订阅端还是广播端都需要依赖
+
+```xml
+<!-- 增加消息总线RabbitMQ支持 -->
+<dependency>
+	<groupId>org.springframework.cloud</groupId>
+	<artifactId>spring-cloud-starter-bus-amqp</artifactId>
+</dependency>
+```
+
+**rabbit mq 安装**
+
+------
+
+docker 安装 rabbitmq
+
+```shell
+docker pull rabbitmq:3.8.3-management
+```
+
+创建并执行容器
+
+```shell
+docker run -d --hostname my-rabbit -p 5672:5672 -p 15672:15672 rabbitmq:3.8.3-management
+```
+
+访问图形化地址：默认账号：guest，密码guest
+
+```tex
+http://192.168.99.100:15672
+```
+
+**广播【Config服务端】**
+
+------
+
+yml配置
+
+```yml
+spring:
+  # rabbitmq 配置
+  rabbitmq:
+  	# rabbitmq 地址
+    host: 192.168.99.100
+    # rabbitmq 端口 不是图形化端口
+    port: 5672
+    # 账号
+    username: guest
+    # 密码
+    password: guest
+
+# RabbitMQ 相关配置，暴露bus刷新配置的端点
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "bus-refresh"
+```
+
+
+
+**订阅【微服务】**
+
+------
+
+bootsrap.yml
+
+```yml
+spring:
+  # rabbitmq 配置
+  rabbitmq:
+  	# rabbitmq 地址
+    host: 192.168.99.100
+    # rabbitmq 端口 不是图形化端口
+    port: 5672
+    # 账号
+    username: guest
+    # 密码
+    password: guest
+
+# 暴露监控端点
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+```
+
+当Config端【广播】与微服务端【订阅】进行这样配置以后，只需要运维发送一个post请求给Config端即可刷新所有订阅了Config端的微服务配置
+
+```tex
+Config端ip:端口/actuator/bus-refresh
+```
+
+若只想刷新某个订阅了的微服务配置
+
+```tex
+Config端ip:端口/actuator/bus-refresh/微服务名称:端口
+```
+
+微服务名称如：
+
+```yml
+# 设置服务名称，作为当前项目注册进Eureka中的名称
+spring:
+  application:
+    name: provider-grade-service
+```
+
+**注意：**
+
+​	要想微服务配置被刷新，需要刷新的类上必须带着注解`@RefreshScope`，没带的无法刷新配置信息。
+
+
+
+
+
