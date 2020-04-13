@@ -476,6 +476,12 @@ jdbc.password=123
 @Transactional
 ```
 
+**@Transactional 详情**
+
+```tex
+https://www.jianshu.com/p/befc2d73e487
+```
+
 
 
 
