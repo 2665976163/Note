@@ -24,3 +24,28 @@ vue ui
 vue -V
 ```
 
+
+
+restful 风格
+
+导入 qs 库
+
+```shell
+yarn add qs
+```
+
+请求案例
+
+```vue
+export default {
+  methods: {
+    test1() {
+      this.$http.post("test",this.$qs.stringify({id: '123222'}))
+      //this.$http.put("test",qs.stringify({id: '123222'}))
+      //this.$http.get("test?id=123123")
+      //this.$http.delete("test?id=123123")
+    }
+  }
+}
+```
+

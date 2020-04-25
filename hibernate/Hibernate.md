@@ -982,7 +982,7 @@ student[stuId stuName fk_clsId] -> [1,"1号学生",1],[2,"2号学生",2],[3,"3�
 
 #### 一对多
 
-```
+```xml
 <set name="属性">
 	<key column="外键列名" />
 	<one-to-many class="多方的类路径" />
@@ -991,7 +991,7 @@ student[stuId stuName fk_clsId] -> [1,"1号学生",1],[2,"2号学生",2],[3,"3�
 
 #### 多对多
 
-```
+```xml
 <set name="属性" table="中间表名">
 	<key column="外键列名[]" />
 	<many-to-many class="另外多的一方的类路径" column="外键列名[]" />
@@ -1003,7 +1003,7 @@ student[stuId stuName fk_clsId] -> [1,"1号学生",1],[2,"2号学生",2],[3,"3�
 
 采用<many-to-one>标签，指定多的一端的unique=true，这样就限制了多段的多重性为一。
 
-```
+```xml
 <many-to-one name="属性名" column="外键列名" unique="true"></many-to-one>
 ```
 
@@ -1011,7 +1011,7 @@ student[stuId stuName fk_clsId] -> [1,"1号学生",1],[2,"2号学生",2],[3,"3�
 
 需要在一端添加<one-to-one>标签，用property-ref来指定反向属性引用
 
-```
+```xml
 <one-to-one name="属性名" property-ref="主控端的属性ID"></one-to-one>
 ```
 

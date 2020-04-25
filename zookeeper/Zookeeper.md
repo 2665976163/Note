@@ -6,6 +6,8 @@
 https://baike.baidu.com/item/zookeeper/4836397?fr=aladdin
 ```
 
+本笔记若图片无法加载建议拉取到本地查看，GitHub可能将图片资源拦截了。
+
 **Zookeeper特点**
 
 ```java
@@ -17,5 +19,42 @@ https://baike.baidu.com/item/zookeeper/4836397?fr=aladdin
 6)实时性，在一定时间范围内，Client能读到最新数据。
 ```
 
+**docker**
 
+```shell
+# 安裝 docker
+docker pull zookeeper
+# 运行 zookeeper
+docker run -d --name zk -p 2181:2181 zookeeper
+# 查看 zookeeper 配置信息
+docker inspect zk
+# 进入 zookeeper 容器
+docker exec -it zk
+```
+
+
+
+
+
+**初始 zookeeper**
+
+------
+
+**docker** 中 **zookeeper** 的目录结构 
+
+![](images/zookeeper 目录结构.png)
+
+其中 bin 中包含 zookeeper 的客户端脚本，可以通过客户端脚本连接zookeeper。
+
+![zookeeper 客户端脚本](images/zookeeper 客户端脚本.png)
+
+通过命令 `./zkCli.sh` 连接 **zookeeper 服务端**
+
+![连接结果](images/连接结果.png)
+
+可以通过 `ls /` 查看 **zookeeper** 节点信息
+
+![节点信息](images/节点信息.png)
+
+可以通过 `quit` 退出 **zookeeper** 客户端
 

@@ -208,7 +208,9 @@ public static void main(String[] args) throws Exception{
 
 
 
-##### 保存返回Id
+##### 插入数据并返回主键Id
+
+返回的主键ID存储在传入对象的Id中
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -228,6 +230,65 @@ public static void main(String[] args) throws Exception{
 	</insert>
 </mapper>
 ```
+
+**第二种方式**
+
+```xml
+<insert id="save" 
+        keyColumn="id"  
+        keyProperty="id" 
+        useGeneratedKeys="true" 
+        parameterType="com.znsd.dao.User">
+		insert into user(name) values(#{name})
+</insert>
+<!--
+	keyColumn:数据库列字段
+	keyProperty:JavaBean字段
+	useGeneratedKeys: 生成主键
+-->
+```
+
+
+
+
+
+
+
+##### 查询迭代in的数据
+
+```xml
+<!-- 根据ids查询用户 -->
+<select id="queryUserByIds" parameterType="java.util.List" resultType="user">
+	SELECT * FROM `user`
+	<where>
+		<foreach collection="ids" item="item" open="id IN (" close=")"
+			separator=",">
+			#{item}
+		</foreach>
+	</where>
+</select>
+```
+
+
+
+
+
+##### 迭代修改字段
+
+```xml
+<update id="update" parameterType="java.util.Map">
+	update `user` set
+    <foreach collection="ids" item="value" index="key" separator=",">
+			#{item}
+	</foreach>
+</update>
+```
+
+
+
+
+
+
 
 
 
