@@ -1774,3 +1774,509 @@ spring:
 
 
 
+
+
+## Sleuth
+
+ Spring Cloud Sleuth为[Spring Cloud](https://cloud.spring.io/)实现了分布式跟踪解决方案 
+
+与 zipkin 组合使用可以图形化监控微服务此刻的关系、异常的追踪， 某段时间内请求的耗时等 ，**如图**
+
+**微服务关系依赖**
+
+![关系依赖](images/sleuth/关系依赖.png)
+
+**异常追踪**
+
+![异常](images/sleuth/异常.png)
+
+**某段时间内请求的耗时**
+
+![耗时](images/sleuth/耗时.png)
+
+
+
+
+
+**快速入门**
+
+------
+
+**Zipkin 配置**
+
+下载zipkin.jar 
+
+```tex
+http://dl.bintray.com/openzipkin/maven/io/zipkin/java/zipkin-server/2.12.9/zipkin-server-2.12.9-exec.jar
+```
+
+java -jar zipkin-server-2.12.9-exec.jar 运行
+
+输入 [http://localhost:9411](http://localhost:9411/) 进入zipkin 图形化界面
+
+![zipkin界面](images/sleuth/zipkin界面.png)
+
+这样 zipkin 就配置完毕了
+
+**sleuth 配置**
+
+需要链路监控的微服务配置依赖
+
+```xml
+<dependency>
+	<groupId>org.springframework.cloud</groupId>
+	<artifactId>spring-cloud-starter-zipkin</artifactId>
+</dependency>
+```
+
+该启动器内包含俩个启动器 zipkin 自身 还有 sleuth 的启动器
+
+微服务yml 配置
+
+```yml
+server:
+  port: 8001
+spring:
+  application:
+    name: cloud-sleuth-provider
+  zipkin:
+    # zipkin 端的地址
+    base-url: http://localhost:9411
+  sleuth:
+    sampler:
+      # 所设置的值介于 0 到 1 之间，1 则表示全部采集
+      probability: 1
+```
+
+**模拟场景：**微服务1、2、3、4
+
+1-4都进行了sleuth配置，1调用2->3->4，当用户对1进行调用，可以通过zipkin图形化查找微服务1的调用记录，然后就可以从调用记录中看到1->2->3->4 耗时、调用是否正常等.
+
+
+
+
+
+# SpringCloud Alibaba
+
+​		Spring Cloud Alibaba为分布式应用程序开发提供了一站式解决方案。它包含开发分布式应用程序所需的所有组件，使您可以轻松地使用Spring Cloud开发应用程序。
+
+​		使用Spring Cloud Alibaba，您只需添加一些注释和少量配置即可将Spring Cloud应用程序连接到Alibaba的分布式解决方案，并使用Alibaba中间件构建分布式应用程序系统。
+
+![特征](images/springcloud alibaba/特征.png)
+
+**入门**
+
+要想后面的技术可以不添加版本号就请在父pom中添加springcloud alibaba 的依赖 
+
+```xml
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-alibaba-dependencies</artifactId>
+            <version>2.1.0.RELEASE</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+```
+
+
+
+
+
+## Nacos
+
+ 一个更易于构建云原生应用的动态服务发现、配置管理和服务管理平台
+
+nacos 支持 spring、springboot、springcloud三种不同环境的服务注册与发现、配置管理
+
+ https://nacos.io/zh-cn/docs/quick-start-spring.html 
+
+官方地址：https://nacos.io/zh-cn/index.html
+
+**Nacos 下载地址**
+
+```tex
+https://github.com/alibaba/nacos/releases/tag/1.2.1
+```
+
+**Nacos 启动**
+
+```tex
+nacos/bin/startup.cmd
+```
+
+**Nacos 访问地址**
+
+```tex
+http://localhost:8848/nacos
+```
+
+账号密码默认：nacos
+
+
+
+### **Nacos 注册与发现**
+
+**微服务提供者**
+
+> nacos 服务发现依赖
+
+```xml
+<dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+</dependency>
+```
+
+yml 配置
+
+```yml
+server:
+  port: 8001
+spring:
+  application:
+    name: nacos-provider-server
+  cloud:
+    nacos:
+      discovery:
+        # nacos的地址
+        server-addr: localhost:8848
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+```
+
+management 需要导入健康检查包
+
+```xml
+<dependency>
+	<groupId>org.springframework.boot</groupId>
+	<artifactId>spring-boot-starter-actuator</artifactId>
+</dependency>
+```
+
+启动之后 nacos 中服务管理 -> 服务列表 就可以看见自己的服务且相关详细信息。
+
+![服务案例](images/springcloud alibaba/服务案例.png)
+
+Nacos 依赖集成了 Ribbon 不论是负载均衡，还是集群都与之前的注册中心一致。
+
+**消费者**
+
+导入 nacos 服务发现依赖，与以上提供者一致
+
+```xml
+<!-- nacos 注册与发现 -->
+<dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+</dependency>
+```
+
+yml 配置
+
+```yml
+server:
+  port: 9001
+spring:
+  application:
+    name: nacos-consumer-server
+  cloud:
+    nacos:
+      discovery:
+        # nacos的地址
+        server-addr: localhost:8848
+# 健康检查
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+```
+
+**微服务调用**
+
+```java
+@RestController
+public class ConsumerController {
+
+    @Resource
+    private RestTemplate restTemplate;
+
+    private String URL = "http://nacos-provider-server";
+
+    @GetMapping("/consumer/providerPort")
+    public String providerPort(){
+        return restTemplate.getForObject(URL+"/provider/port",String.class);
+    }
+}
+```
+
+
+
+
+
+### Nacos 配置中心
+
+在nacos图形化中创建配置
+
+**点击添加**
+
+![nacos 创建配置 1](images/springcloud alibaba/nacos 创建配置 1.png)
+
+**编辑信息**
+
+![nacos 创建配置 2](images/springcloud alibaba/nacos 创建配置 2.png)
+
+配置完毕后点击发布即可。
+
+项目若需要读取nacos中的依赖可以进行以下配置
+
+**配置依赖**
+
+```xml
+<!-- nacos 配置中心 读取nacos中配置的所需依赖 -->
+<dependency>
+  <groupId>com.alibaba.cloud</groupId>
+  <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
+</dependency>
+```
+
+**读取nacos 配置 yml**
+
+```yml
+server:
+  port: 3344
+
+spring:
+  # 环境名称 任意名称
+  profiles:
+    active: dev
+  application:
+    name: nacos-config-consumer
+  cloud:
+    nacos:
+      config:
+        # nacos 服务地址
+        server-addr: localhost:8848
+        # 配置文件的前缀
+        prefix: application
+        # 配置文件的后缀 目前只支持 properties 和 yaml 类型
+        file-extension: yaml
+      discovery:
+        # nacos 服务地址
+        server-addr: localhost:8848
+```
+
+注意，读取配置必须在bootstrap.yml中配置，否则可能会抛出异常
+
+测试**Controller**
+
+```yml
+@RestController
+@RefreshScope
+public class TestReaderConfigController {
+    @Value("${info.content}")
+    private String content;
+
+    @GetMapping("/info/content")
+    public String getContent(){
+        return content;
+    }
+}
+```
+
+注意需要刷新的类上必须加上注解 `@RefreshScope` 否则当在服务运行期间，nacos配置更新，服务无法检测到。
+
+另外nacos 还支持分组、分命名
+
+![nacos 分命名分组](images/springcloud alibaba/nacos 分命名分组.png)
+
+**详情**
+
+```tex
+https://www.bilibili.com/video/BV18E411x7eT?p=105
+```
+
+![组与命名空间](images/springcloud alibaba/组与命名空间.png)
+
+namespace 不配置默认使用 public 命名空间
+
+group 不配置默认为 DEFAULT_GROUP
+
+
+
+### Nacos 配置存储
+
+​	在0.7版本之前，在单机模式时nacos使用嵌入式数据库实现数据的存储，不方便观察数据存储的基本情况。0.7版本增加了支持mysql数据源能力，原本nacos的数据存储在内置数据库进行以下配置可以将数据存储在自己的mysql数据库，具体的操作步骤：
+
+- 1.安装数据库，版本要求：5.6.5+
+- 2.初始化mysql数据库，数据库初始化文件：nacos-mysql.sql 
+- 3.修改nacos/conf/application.properties文件，支持mysql数据源配置（目前只支持mysql），添加mysql数据源的url、用户名和密码。
+
+数据库初始化文件 nacos/conf/nacos-mysql.sql
+
+```properties
+#1. 在自己的mysql中创建一个为nacos_config的库
+#2. 将nacos-mysql.sql中的sql全部复制，在nacos_config库中运行
+```
+
+修改nacos/conf/application.properties 配置
+
+```properties
+# 支持mysql数据源配置（目前只支持mysql）
+spring.datasource.platform=mysql
+
+db.num=1
+# mysql数据源的url
+db.url.0=jdbc:mysql://192.168.99.100:3306/nacos_config?characterEncoding=utf8&connectTimeout=1000&socketTimeout=3000&autoReconnect=true
+# 用户名
+db.user=root
+# 密码
+db.password=123
+```
+
+重启nacos，若之前有创建配置，当启动完毕之前的配置没有了，因为数据开始从mysql中读取，数据也存储在自己的mysql中。
+
+
+
+### Nacos 集群
+
+nacos 集群采用 docker 搭建
+
+**架构图**
+
+![nacos 集群](images/springcloud alibaba/nacos 集群.png)
+
+从以上看出，首先需要多个 nacos，nacos 实例中需要声明其他 nacos实例，nacos1指定了nacos2、nacos3，nacos2指定了nacos1、nacos3 ...，各个nacos指定完其他nacos后，这时需要一个nginx做反向代理，当微服务进行服务注册时只需要填写nginx的地址由nginx将该服务注册的请求转发给某一个nacos，因为在开始nacos做了互相绑定，当一个nacos中产生了新的微服务其他nacos中也会读取过去，即使该nacos挂掉了其他读取过去的微服务也不会被影响。
+
+**nacos 一条龙**
+
+![nacos 集群步骤1](images/springcloud alibaba/nacos 集群步骤1.png)
+
+**下载并启动nacos**
+
+```shell
+# 下载 nacos
+docker pull nacos/nacos-server:1.1.4
+# 创建 nacos 实例并运行 创建三个nacos容器 其余俩个省略
+docker run --env MODE=standalone --name nacos1 -d -p 8838:8848 nacos/nacos-server:1.1.4
+```
+
+**修改nacos 存储配置** 保证每个nacos实例的配置都是同一份
+
+```properties
+# conf/application.properties 添加内容
+spring.datasource.platform=mysql
+
+db.num=1
+db.url.0=jdbc:mysql://192.168.900.100:3306/nacos_devtest?characterEncoding=utf8&connectTimeout=1000&socketTimeout=3000&autoReconnect=true
+db.user=root
+db.password=123
+# 初始化数据库等..
+```
+
+https://nacos.io/zh-cn/docs/deployment.html 官网描述配置mysql
+
+**添加集群配置**  nacos/conf 下新建集群配置 cluster.conf 文件
+
+```powershell
+# ip:port 指定其他nacos地址[可以包括自己]
+192.168.99.100:8838
+192.168.99.100:8828
+192.168.99.100:8818
+```
+
+**重启 nacos 容器**
+
+```shell
+docker restart nacos1 #[docker restart nacos2，docker restart nacos3]
+```
+
+nacos 配置完毕
+
+
+
+**Nginx 一条龙**
+
+![nacos 集群步骤2](images/springcloud alibaba/nacos 集群步骤2.png)
+
+```shell
+# 下载 nginx
+docker pull nginx
+# 创建 nginx 实例并运行
+docker run -d -p 1111:80 --name=nginx nginx
+# 进入 nginx 容器  
+docker exec -it nginx /bin/bash
+# 修改配置文件 /etc/nginx/nginx.conf
+vi /etc/nginx/nginx.conf
+```
+
+nginx.conf 增加内容
+
+```properties
+http {
+    #gzip  on;
+    # 添加 upstream myserver 与 server
+    upstream myserver {
+    	# nacos1
+        server 192.168.99.100:8838;
+    	# nacos2
+        server 192.168.99.100:8828;
+    	# nacos3
+        server 192.168.99.100:8818;
+    }
+
+    server {
+        location / {
+          proxy_pass http://myserver;
+        }
+    }
+    include /etc/nginx/conf.d/*.conf;
+}
+```
+
+**重启nginx**
+
+```properties
+docker restart nginx
+```
+
+访问 测试nginx是否配置成功
+
+```tex
+192.168.99.100:1111/nacos
+```
+
+若进入nacos界面则配置完毕.
+
+
+
+**微服务 application.yml 注册指定nginx 地址**
+
+```yml
+server:
+  port: 9001
+spring:
+  application:
+    name: nacos-consumer-server
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 192.168.99.100:1111
+```
+
+以上就是nacos 集群的全部内容。
+
+
+
+
+
+
+
+## Sentinel
