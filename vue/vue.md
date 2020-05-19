@@ -49,3 +49,10 @@ export default {
 }
 ```
 
+存值 取值
+
+```md
+const thisUser = JSON.parse(window.sessionStorage.getItem('userBean'))
+window.sessionStorage.setItem('userBean', JSON.stringify({ u_Id: 1 }))
+```
+
