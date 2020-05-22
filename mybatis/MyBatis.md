@@ -841,3 +841,49 @@ public interface AccountDao {
 }
 ```
 
+
+
+
+
+
+
+
+
+## 通用Mapper
+
+自动生成对单表操作的一系列方法
+
+> pom 依赖
+
+```xml
+<dependency>
+    <groupId>tk.mybatis</groupId>
+    <artifactId>mapper-spring-boot-starter</artifactId>
+    <version>2.1.5</version>
+</dependency>
+```
+
+> 实体类
+
+```java
+@Table(name = "t_Test")
+@NameStyle(Style.normal)
+@Data // lombok
+public class TestBean {
+    @Id
+    private Integer t_Id;
+    private String t_Name;
+}
+```
+
+> mapper
+
+```java
+import tk.mybatis.mapper.common.Mapper;
+
+@org.apache.ibatis.annotations.Mapper
+public interface TestMapper extends Mapper<TestBean> {
+}
+```
+
+当使用该mapper时会有一系列的对单表操作的方法.
